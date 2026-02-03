@@ -1,0 +1,20 @@
+Restaurant,Offer Code,Description,DiscountAmount
+Grill House,PHOL,Public Holiday Discount,10
+Bento Express,DELI,Free Delivery for Orders over $30,-
+Sushi Zen,FEST,Festive Season Discount,8
+Sushi Zen,EARL,Early Bird Special Discount,5
+Burger Barn,WEEK,Weekday Special Discount,3
+Burger Barn,PHOL,Public Holiday Discount,10
+Taco Town,PHOL,Public Holiday Discount,10
+Taco Town,FEST,Festive Season Discount,8
+Pasta Pronto,DELI,Free Delivery for Orders over $30,-
+Steak Station,EARL,Early Bird Special Discount,5
+Steak Station,PHOL,Public Holiday Discount,10
+Curry Corner,BOGO,Buy One Get One Free,-
+Curry Corner,DELI,Free Delivery for Orders over $30,-
+Dim Sum Den,BOGO,Buy One Get One Free,-
+Waffle World,BOGO,Buy One Get One Free,-
+Waffle World,FEST,Festive Season Discount,8
+Soup Shack,WEEK,Weekday Special Discount,3
+Soup Shack,PHOL,Public Holiday Discount,10
+Donut Delight,FEST,Festive Season Discount,8
