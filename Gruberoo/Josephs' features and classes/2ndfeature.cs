@@ -1,3 +1,8 @@
+//==========================================================
+// Student Number : S10272886
+// Student Name : Joseph Wong
+// Partner Name : Aydan Yeo
+//========================================================== 
 using System;
 using System.Collections.Generic;
 
