@@ -11,7 +11,7 @@ namespace FoodOrderingApp
 {
     public class Order
     {
-        public int OrderNo { get; set; }
+        public int OrderId { get; set; }
         public DateTime OrderDateTime { get; set; }
         public double OrderTotal { get; set; }
         public string OrderStatus { get; set; }
@@ -20,21 +20,27 @@ namespace FoodOrderingApp
         public string OrderPaymentMethod { get; set; }
         public bool OrderPaid { get; set; }
 
-        public List<OrderedFoodItem> OrderedFoodItems { get; set; }
+        public List<OrderedFoodItem> OrderedFoodItems { get; set; } = new List<OrderedFoodItem>();
 
-        public Order(int orderNo, string status, string address, string paymentMethod)
+        public Order(int orderId, string status, string address, string paymentMethod)
         {
-            OrderNo = orderNo;
+            OrderId = orderId;
             OrderStatus = status;
             DeliveryAddress = address;
             OrderPaymentMethod = paymentMethod;
 
             OrderDateTime = DateTime.Now;
             DeliveryDateTime = DateTime.Now;
-            OrderPaid = false;
-
-            OrderedFoodItems = new List<OrderedFoodItem>();
             OrderTotal = 0;
+            OrderPaid = false;
+        }
+
+        public double CalculateOrderTotal()
+        {
+            OrderTotal = 0;
+            foreach (OrderedFoodItem i in OrderedFoodItems)
+                OrderTotal += i.CalculateSubtotal();
+            return OrderTotal;
         }
 
         public void AddOrderedFoodItem(OrderedFoodItem item)
@@ -50,22 +56,15 @@ namespace FoodOrderingApp
             return removed;
         }
 
-        public double CalculateOrderTotal()
+        public void DisplayOrderedFoodItems()
         {
-            OrderTotal = 0;
-
-            foreach (OrderedFoodItem item in OrderedFoodItems)
-            {
-                OrderTotal = OrderTotal + item.CalculateSubtotal();
-            }
-
-            return OrderTotal;
+            foreach (OrderedFoodItem i in OrderedFoodItems)
+                Console.WriteLine(i);
         }
 
         public override string ToString()
         {
-            return "Order " + OrderNo + " | Total: $" + CalculateOrderTotal();
+            return "Order " + OrderId + " | " + OrderStatus + " | $" + OrderTotal;
         }
     }
-}
 
