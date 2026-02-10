@@ -3,10 +3,7 @@
 // Student Name : Joseph Wong
 // Partner Name : Aydan Yeo
 //========================================================== 
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
+
 
 public static class JosephFeatures
 {
@@ -112,11 +109,35 @@ public static class JosephFeatures
         if (sr == "Y")
             order.SpecialRequest = ReadNonEmpty("Enter special request: ");
 
+        // ---- Joseph BONUS: Special offer discount (tutor approval needed) ----
         double itemsTotal = order.CalculateItemsTotal();
-        double finalTotal = itemsTotal + DELIVERY_FEE;
+        double deliveryFee = DELIVERY_FEE;
+
+        string promoCode;
+        double discountAmount;
+        ApplySpecialOffer(itemsTotal, ref deliveryFee, out promoCode, out discountAmount);
+
+        // final calculation
+        double finalTotal = (itemsTotal - discountAmount) + deliveryFee;
         order.OrderTotal = finalTotal;
 
-        Console.WriteLine($"Order Total: ${itemsTotal:0.00} + ${DELIVERY_FEE:0.00} (delivery) = ${finalTotal:0.00}");
+        // Store promo info WITHOUT changing CSV format:
+        // We attach it to SpecialRequest so you don't add new CSV columns.
+        if (!string.IsNullOrEmpty(promoCode))
+        {
+            string promoNote = $"PROMO={promoCode} (-${discountAmount:0.00}). ";
+            order.SpecialRequest = promoNote + (order.SpecialRequest ?? "");
+        }
+
+        // Print breakdown (matches the writeup)
+        Console.WriteLine();
+        Console.WriteLine($"Items:    ${itemsTotal:0.00}");
+        Console.WriteLine($"Discount: -${discountAmount:0.00}");
+        Console.WriteLine($"Delivery: ${deliveryFee:0.00}");
+        Console.WriteLine($"Final:    ${finalTotal:0.00}");
+        Console.WriteLine();
+        // --------------------------------------------------------------
+
 
         Console.Write("Proceed to payment? [Y/N]: ");
         string pay = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
@@ -147,9 +168,9 @@ public static class JosephFeatures
     // FEATURE 7: Modify an existing order (Pending only)
     // ---------------------------
     public static void Feature7_ModifyExistingOrder(
-    List<Customer> customers,
-    List<Restaurant> restaurants,
-    string ordersPath)
+        List<Customer> customers,
+        List<Restaurant> restaurants,
+        string ordersPath)
     {
         Console.WriteLine();
         Console.WriteLine("Modify Order");
@@ -189,19 +210,16 @@ public static class JosephFeatures
             return;
         }
 
-        // show current details (same as sample flow)
         PrintOrderDetails(order);
 
         Console.Write("Modify: [1] Items [2] Address [3] Delivery Time: ");
         string choice = (Console.ReadLine() ?? "").Trim();
 
-        // snapshot for rollback + for “what changed” messages
         double oldTotal = order.OrderTotal;
         string oldAddr = order.DeliveryAddress;
         DateTime oldDelivery = order.DeliveryDateTime;
         var oldItems = CloneItems(order.OrderedFoodItems);
 
-        // we’ll build the exact “updated…” message based on the choice
         string updatedMessage;
 
         if (choice == "1")
@@ -217,8 +235,7 @@ public static class JosephFeatures
         else if (choice == "3")
         {
             order.DeliveryDateTime = PromptNewTimeSameDate(order.DeliveryDateTime);
-            string newTime = order.DeliveryDateTime.ToString("HH:mm", CultureInfo.InvariantCulture);
-            // matches the sample style: “New Delivery Time: 14:00”
+            string newTime = order.DeliveryDateTime.ToString("HH:mm");
             updatedMessage = $"Order {order.OrderId} updated. New Delivery Time: {newTime}";
         }
         else
@@ -227,10 +244,8 @@ public static class JosephFeatures
             return;
         }
 
-        // recalc after changes
         order.RecalculateTotalWithDelivery(DELIVERY_FEE);
 
-        // if total increased, prompt to pay (keep your existing behaviour)
         if (order.OrderTotal > oldTotal + 0.0001)
         {
             Console.WriteLine($"Order total increased: ${oldTotal:0.00} -> ${order.OrderTotal:0.00}");
@@ -239,7 +254,6 @@ public static class JosephFeatures
 
             if (pay != "Y")
             {
-                // rollback
                 order.OrderTotal = oldTotal;
                 order.DeliveryAddress = oldAddr;
                 order.DeliveryDateTime = oldDelivery;
@@ -255,16 +269,11 @@ public static class JosephFeatures
             order.OrderPaid = true;
         }
 
-        // persist
         OrderCsvStore.RewriteAllOrders(ordersPath, customers);
 
-        // ✅ now prints “updated” + what exactly was updated (like the sample wants)
         Console.WriteLine(updatedMessage);
-
-        // optional but matches the spec line “display updated order details”
         PrintOrderDetails(order);
     }
-
 
     // ---------------------------
     // ADVANCED FEATURE (a): Bulk processing of unprocessed orders for current day
@@ -281,30 +290,26 @@ public static class JosephFeatures
         DateTime now = DateTime.Now;
         DateTime today = now.Date;
 
-        // 1) identify all orders with status "Pending" (in order queues)
         int totalPendingInQueues = 0;
         int processed = 0;
         int preparing = 0;
         int rejected = 0;
 
-        // Only process "current day" pending orders (delivery date = today)
         var toProcess = new List<Order>();
 
         foreach (var r in restaurants)
         {
-            foreach (var o in r.OrderQueue) // Queue<T> can be enumerated
+            foreach (var o in r.OrderQueue)
             {
                 if (string.Equals(o.OrderStatus, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
                     totalPendingInQueues++;
-
                     if (o.DeliveryDateTime.Date == today)
                         toProcess.Add(o);
                 }
             }
         }
 
-        // 2) display total number in the Order Queues with this status
         Console.WriteLine($"Total Pending orders in all restaurant queues: {totalPendingInQueues}");
 
         if (toProcess.Count == 0)
@@ -313,9 +318,6 @@ public static class JosephFeatures
             return;
         }
 
-        // 3) for each order: attempt to process it
-        // - Rejected if delivery time is less than 1 hour
-        // - else Preparing
         foreach (var o in toProcess)
         {
             bool lessThanOneHour = (o.DeliveryDateTime - now) < TimeSpan.FromHours(1);
@@ -334,11 +336,8 @@ public static class JosephFeatures
             processed++;
         }
 
-        // Optional but useful: persist statuses back into orders.csv
-        // (so restart of program keeps the updated statuses)
         OrderCsvStore.RewriteAllOrders(ordersPath, customers);
 
-        // 4) display summary statistics
         double percent = (totalPendingInQueues == 0)
             ? 0.0
             : (processed * 100.0 / totalPendingInQueues);
@@ -352,7 +351,6 @@ public static class JosephFeatures
         Console.WriteLine($"% processed against all Pending orders: {percent:0.00}%");
         Console.WriteLine();
     }
-
 
     // =========================
     // Helpers
@@ -445,12 +443,7 @@ public static class JosephFeatures
             string d = ReadNonEmpty("Enter Delivery Date (dd/mm/yyyy): ");
             string t = ReadNonEmpty("Enter Delivery Time (hh:mm): ");
 
-            if (DateTime.TryParseExact(
-                d + " " + t,
-                new[] { "dd/MM/yyyy HH:mm", "d/M/yyyy HH:mm" },
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out DateTime dt))
+            if (TryParseDateTimeDMY(d, t, out DateTime dt))
                 return dt;
 
             Console.WriteLine("Invalid delivery date/time. Try again.\n");
@@ -462,11 +455,62 @@ public static class JosephFeatures
         while (true)
         {
             string t = ReadNonEmpty("Enter new Delivery Time (hh:mm): ");
-            if (TimeSpan.TryParseExact(t, "hh\\:mm", CultureInfo.InvariantCulture, out TimeSpan ts))
+
+            if (TryParseTimeHHmm(t, out TimeSpan ts))
                 return oldDT.Date + ts;
 
             Console.WriteLine("Invalid time. Try again.\n");
         }
+    }
+
+    private static bool TryParseDateTimeDMY(string dateStr, string timeStr, out DateTime dt)
+    {
+        dt = default;
+
+        if (!TryParseDateDMY(dateStr, out DateTime date)) return false;
+        if (!TryParseTimeHHmm(timeStr, out TimeSpan time)) return false;
+
+        dt = date.Date + time;
+        return true;
+    }
+
+    private static bool TryParseDateDMY(string dateStr, out DateTime date)
+    {
+        date = default;
+
+        string[] parts = dateStr.Split('/');
+        if (parts.Length != 3) return false;
+
+        if (!int.TryParse(parts[0].Trim(), out int day)) return false;
+        if (!int.TryParse(parts[1].Trim(), out int month)) return false;
+        if (!int.TryParse(parts[2].Trim(), out int year)) return false;
+
+        try
+        {
+            date = new DateTime(year, month, day);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryParseTimeHHmm(string timeStr, out TimeSpan time)
+    {
+        time = default;
+
+        string[] parts = timeStr.Split(':');
+        if (parts.Length != 2) return false;
+
+        if (!int.TryParse(parts[0].Trim(), out int hh)) return false;
+        if (!int.TryParse(parts[1].Trim(), out int mm)) return false;
+
+        if (hh < 0 || hh > 23) return false;
+        if (mm < 0 || mm > 59) return false;
+
+        time = new TimeSpan(hh, mm, 0);
+        return true;
     }
 
     private static string ReadNonEmpty(string prompt)
@@ -516,4 +560,59 @@ public static class JosephFeatures
 
     private static List<OrderedFoodItem> CloneItems(List<OrderedFoodItem> items) =>
         items.Select(it => new OrderedFoodItem(it.ItemName, it.Description, it.Price, it.QtyOrdered)).ToList();
+}
+
+// Joseph (BONUS): Apply a promo code discount 
+private static void ApplySpecialOffer(
+    double itemsTotal,
+    ref double deliveryFee,
+    out string promoCode,
+    out double discountAmount)
+{
+    promoCode = "";
+    discountAmount = 0;
+
+    Console.Write("Apply special offer? [Y/N]: ");
+    string yn = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+
+    if (yn != "Y") return;
+
+    while (true)
+    {
+        Console.WriteLine("Choose promo code:");
+        Console.WriteLine("  DISC10  = 10% off items subtotal");
+        Console.WriteLine("  LESS5   = $5 off items subtotal (min $20)");
+        Console.WriteLine("  FREEDEL = waive delivery fee");
+        Console.Write("Enter promo code: ");
+
+        string code = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+
+        if (code == "DISC10")
+        {
+            promoCode = "DISC10";
+            discountAmount = itemsTotal * 0.10;
+            return;
+        }
+
+        if (code == "LESS5")
+        {
+            promoCode = "LESS5";
+            discountAmount = (itemsTotal >= 20.0) ? 5.0 : 0.0;
+
+            if (itemsTotal < 20.0)
+                Console.WriteLine("LESS5 requires minimum $20 items subtotal. No discount applied.");
+
+            return;
+        }
+
+        if (code == "FREEDEL")
+        {
+            promoCode = "FREEDEL";
+            deliveryFee = 0.0;
+            discountAmount = 0.0;
+            return;
+        }
+
+        Console.WriteLine("Invalid promo code. Try again.\n");
+    }
 }
