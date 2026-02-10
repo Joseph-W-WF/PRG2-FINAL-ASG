@@ -445,9 +445,9 @@ public static class JosephFeatures
         Console.WriteLine();
     }
 
-}
 
-private static DateTime PromptDeliveryDateTime()
+
+    private static DateTime PromptDeliveryDateTime()
     {
         while (true)
         {
@@ -571,59 +571,60 @@ private static DateTime PromptDeliveryDateTime()
 
     private static List<OrderedFoodItem> CloneItems(List<OrderedFoodItem> items) =>
         items.Select(it => new OrderedFoodItem(it.ItemName, it.Description, it.Price, it.QtyOrdered)).ToList();
-}
 
-// Joseph (BONUS): Apply a promo code discount 
-private static void ApplySpecialOffer(
-    double itemsTotal,
-    ref double deliveryFee,
-    out string promoCode,
-    out double discountAmount)
-{
-    promoCode = "";
-    discountAmount = 0;
 
-    Console.Write("Apply special offer? [Y/N]: ");
-    string yn = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
-
-    if (yn != "Y") return;
-
-    while (true)
+    // Joseph (BONUS): Apply a promo code discount 
+    private static void ApplySpecialOffer(
+        double itemsTotal,
+        ref double deliveryFee,
+        out string promoCode,
+        out double discountAmount)
     {
-        Console.WriteLine("Choose promo code:");
-        Console.WriteLine("  DISC10  = 10% off items subtotal");
-        Console.WriteLine("  LESS5   = $5 off items subtotal (min $20)");
-        Console.WriteLine("  FREEDEL = waive delivery fee");
-        Console.Write("Enter promo code: ");
+        promoCode = "";
+        discountAmount = 0;
 
-        string code = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+        Console.Write("Apply special offer? [Y/N]: ");
+        string yn = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
 
-        if (code == "DISC10")
+        if (yn != "Y") return;
+
+        while (true)
         {
-            promoCode = "DISC10";
-            discountAmount = itemsTotal * 0.10;
-            return;
+            Console.WriteLine("Choose promo code:");
+            Console.WriteLine("  DISC10  = 10% off items subtotal");
+            Console.WriteLine("  LESS5   = $5 off items subtotal (min $20)");
+            Console.WriteLine("  FREEDEL = waive delivery fee");
+            Console.Write("Enter promo code: ");
+
+            string code = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+
+            if (code == "DISC10")
+            {
+                promoCode = "DISC10";
+                discountAmount = itemsTotal * 0.10;
+                return;
+            }
+
+            if (code == "LESS5")
+            {
+                promoCode = "LESS5";
+                discountAmount = (itemsTotal >= 20.0) ? 5.0 : 0.0;
+
+                if (itemsTotal < 20.0)
+                    Console.WriteLine("LESS5 requires minimum $20 items subtotal. No discount applied.");
+
+                return;
+            }
+
+            if (code == "FREEDEL")
+            {
+                promoCode = "FREEDEL";
+                deliveryFee = 0.0;
+                discountAmount = 0.0;
+                return;
+            }
+
+            Console.WriteLine("Invalid promo code. Try again.\n");
         }
-
-        if (code == "LESS5")
-        {
-            promoCode = "LESS5";
-            discountAmount = (itemsTotal >= 20.0) ? 5.0 : 0.0;
-
-            if (itemsTotal < 20.0)
-                Console.WriteLine("LESS5 requires minimum $20 items subtotal. No discount applied.");
-
-            return;
-        }
-
-        if (code == "FREEDEL")
-        {
-            promoCode = "FREEDEL";
-            deliveryFee = 0.0;
-            discountAmount = 0.0;
-            return;
-        }
-
-        Console.WriteLine("Invalid promo code. Try again.\n");
     }
 }
