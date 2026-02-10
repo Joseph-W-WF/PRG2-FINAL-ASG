@@ -176,12 +176,13 @@ public static class JosephFeatures
         Console.WriteLine("Modify Order");
         Console.WriteLine("============");
 
-        var customer = PromptCustomer(customers);
+        Customer customer = PromptCustomer(customers);
         if (customer == null) return;
 
-        var pending = customer.Orders
-            .Where(o => string.Equals(o.OrderStatus, "Pending", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var pending = new List<Order>();
+        foreach (var o in customer.Orders)
+            if (string.Equals(o.OrderStatus, "Pending", StringComparison.OrdinalIgnoreCase))
+                pending.Add(o);
 
         if (pending.Count == 0)
         {
@@ -194,15 +195,20 @@ public static class JosephFeatures
 
         int orderId = ReadInt("Enter Order ID: ", 1, int.MaxValue);
 
-        var order = pending.FirstOrDefault(o => o.OrderId == orderId);
+        Order order = null;
+        foreach (var o in pending)
+            if (o.OrderId == orderId) { order = o; break; }
+
         if (order == null)
         {
             Console.WriteLine("Invalid Order ID.\n");
             return;
         }
 
-        var restaurant = restaurants.FirstOrDefault(r =>
-            string.Equals(r.RestaurantId, order.RestaurantId, StringComparison.OrdinalIgnoreCase));
+        Restaurant restaurant = null;
+        foreach (var r in restaurants)
+            if (string.Equals(r.RestaurantId, order.RestaurantId, StringComparison.OrdinalIgnoreCase))
+            { restaurant = r; break; }
 
         if (restaurant == null)
         {
@@ -220,23 +226,17 @@ public static class JosephFeatures
         DateTime oldDelivery = order.DeliveryDateTime;
         var oldItems = CloneItems(order.OrderedFoodItems);
 
-        string updatedMessage;
-
         if (choice == "1")
         {
             ModifyItems(order, restaurant);
-            updatedMessage = $"Order {order.OrderId} updated. Items updated.";
         }
         else if (choice == "2")
         {
             order.DeliveryAddress = ReadNonEmpty("Enter new Address: ");
-            updatedMessage = $"Order {order.OrderId} updated. New Address: {order.DeliveryAddress}";
         }
         else if (choice == "3")
         {
             order.DeliveryDateTime = PromptNewTimeSameDate(order.DeliveryDateTime);
-            string newTime = order.DeliveryDateTime.ToString("HH:mm");
-            updatedMessage = $"Order {order.OrderId} updated. New Delivery Time: {newTime}";
         }
         else
         {
@@ -254,6 +254,7 @@ public static class JosephFeatures
 
             if (pay != "Y")
             {
+                // rollback
                 order.OrderTotal = oldTotal;
                 order.DeliveryAddress = oldAddr;
                 order.DeliveryDateTime = oldDelivery;
@@ -269,11 +270,22 @@ public static class JosephFeatures
             order.OrderPaid = true;
         }
 
+        // persist modifications back to orders.csv
         OrderCsvStore.RewriteAllOrders(ordersPath, customers);
 
-        Console.WriteLine(updatedMessage);
-        PrintOrderDetails(order);
+        string updateMessage;
+        if (choice == "1")
+            updateMessage = $"Order {order.OrderId} updated. New Total Amount: ${order.OrderTotal:0.00}";
+        else if (choice == "2")
+            updateMessage = $"Order {order.OrderId} updated. New Address: {order.DeliveryAddress}";
+        else
+            updateMessage = $"Order {order.OrderId} updated. New Delivery Time: {order.DeliveryDateTime:HH:mm}";
+
+        Console.WriteLine();
+        Console.WriteLine(updateMessage);
+        Console.WriteLine();
     }
+
 
     // ---------------------------
     // ADVANCED FEATURE (a): Bulk processing of unprocessed orders for current day
@@ -421,7 +433,7 @@ public static class JosephFeatures
 
     private static void PrintOrderDetails(Order o)
     {
-        Console.WriteLine($"Order Items:");
+        Console.WriteLine("Order Items:");
         for (int i = 0; i < o.OrderedFoodItems.Count; i++)
             Console.WriteLine($"{i + 1}. {o.OrderedFoodItems[i].ItemName} - {o.OrderedFoodItems[i].QtyOrdered}");
 
@@ -430,13 +442,12 @@ public static class JosephFeatures
 
         Console.WriteLine("Delivery Date/Time:");
         Console.WriteLine($"{o.DeliveryDateTime:dd/M/yyyy, HH:mm}");
-
-        Console.WriteLine($"Total Amount: ${o.OrderTotal:0.00}");
-        Console.WriteLine($"Order Status: {o.OrderStatus}");
         Console.WriteLine();
     }
 
-    private static DateTime PromptDeliveryDateTime()
+}
+
+private static DateTime PromptDeliveryDateTime()
     {
         while (true)
         {
