@@ -67,6 +67,7 @@ public class Program
             Console.WriteLine("5. Modify an existing order");
             Console.WriteLine("6. Delete an existing order");
             Console.WriteLine("7. Bulk process pending orders (today)");
+            Console.WriteLine("8. Display total order amount");
             Console.WriteLine("0. Exit");
             Console.Write("Enter your choice: ");
 
@@ -107,6 +108,10 @@ public class Program
 
                 case "7":
                     JosephFeatures.AdvancedA_BulkProcessPendingOrdersForToday(restaurants, ordersPath, customers);
+                    break;
+
+                case "8":
+                    AydanFeatures.AdvancedB_DisplayTotalOrderAmount(restaurants, customers);
                     break;
 
                 default:

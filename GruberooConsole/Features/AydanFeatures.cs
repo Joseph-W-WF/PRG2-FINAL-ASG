@@ -384,3 +384,90 @@ public static class AydanFeatures
     }
 }
 
+// advanced feature (b): display total order amount
+public static void AdvancedB_DisplayTotalOrderAmount(List<Restaurant> restaurants, List<Customer> customers)
+{
+    const double DELIVERY_FEE = 5.00;
+    const double GRUBEROO_FEE_RATE = 0.30; // 30%
+
+    Console.WriteLine();
+    Console.WriteLine("Display Total Order Amount");
+    Console.WriteLine("==========================");
+
+    // collect unique orders (avoid double counting if same order appears more than once)
+    Dictionary<int, Order> uniqueOrders = new Dictionary<int, Order>();
+    foreach (var c in customers)
+    {
+        foreach (var o in c.Orders)
+        {
+            if (!uniqueOrders.ContainsKey(o.OrderId))
+                uniqueOrders[o.OrderId] = o;
+        }
+    }
+
+    double grandDeliveredNet = 0.0; // delivered totals excluding delivery fee per order
+    double grandRefunds = 0.0;      // refunded totals (full amount)
+
+    Console.WriteLine("Restaurant                         Delivered (excl. delivery)        Refunds");
+    Console.WriteLine("--------------------------------  -------------------------------   ----------------");
+
+    foreach (var rest in restaurants)
+    {
+        int deliveredCount = 0;
+        double deliveredNet = 0.0;
+
+        int refundCount = 0;
+        double refunds = 0.0;
+
+        foreach (var kv in uniqueOrders)
+        {
+            Order o = kv.Value;
+
+            if (!string.Equals(o.RestaurantId, rest.RestaurantId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (string.Equals(o.OrderStatus, "Delivered", StringComparison.OrdinalIgnoreCase))
+            {
+                deliveredCount++;
+                double net = o.OrderTotal - DELIVERY_FEE;
+                if (net < 0) net = 0;
+                deliveredNet += net;
+            }
+            else if (
+                string.Equals(o.OrderStatus, "Rejected", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(o.OrderStatus, "Cancelled", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                refundCount++;
+                refunds += o.OrderTotal;
+            }
+        }
+
+        grandDeliveredNet += deliveredNet;
+        grandRefunds += refunds;
+
+        string left = $"{TrimTo(rest.Name, 28)} ({rest.RestaurantId})";
+        string deliveredCell = $"{deliveredCount,3} order(s)  ${deliveredNet,10:0.00}";
+        string refundCell = $"{refundCount,3} order(s)  ${refunds,10:0.00}";
+
+        Console.WriteLine($"{left,-32}  {deliveredCell,-31}   {refundCell}");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Overall");
+    Console.WriteLine("-------");
+    Console.WriteLine($"Total order amount (Delivered, excl. delivery): ${grandDeliveredNet:0.00}");
+    Console.WriteLine($"Total refunds (Rejected/Cancelled):            ${grandRefunds:0.00}");
+
+    // final amount Gruberoo earns (uses 30% fee idea)
+    double finalEarned = (grandDeliveredNet - grandRefunds) * GRUBEROO_FEE_RATE;
+    Console.WriteLine($"Final amount Gruberoo earns:                   ${finalEarned:0.00}");
+    Console.WriteLine();
+
+    // small helper (kept inside this method so you don't need to edit other parts)
+    static string TrimTo(string s, int maxLen)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Length <= maxLen ? s : s.Substring(0, maxLen);
+    }
+}
