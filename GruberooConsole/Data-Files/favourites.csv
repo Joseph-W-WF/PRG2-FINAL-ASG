@@ -1,0 +1,2 @@
+FavouriteId,CustomerEmail,FavouriteName,RestaurantId,Items,DefaultAddress,DefaultPaymentMethod,SpecialRequest
+1,alice.tan@email.com,lunch,R003,"Chicken Katsu Bento, 1|Vegetable Tempura Bento, 1",123 Orchard Road #05-01,Loaded,

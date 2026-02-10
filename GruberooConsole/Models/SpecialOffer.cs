@@ -1,3 +1,8 @@
+//==========================================================
+// Student Number : S10273117G
+// Student Name : Aydan Yeo
+// Partner Name : Joseph Wong
+//==========================================================
 public class SpecialOffer
 {
     public string OfferCode { get; }

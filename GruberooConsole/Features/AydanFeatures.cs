@@ -30,7 +30,7 @@ public static class AydanFeatures
         string restaurantsPath = Path.Combine(dataDir, "restaurants.csv");
         string foodItemsPath = FindFoodItemsFile(dataDir);
 
-        // don't crash the whole program if files missing
+        
         if (!File.Exists(restaurantsPath) || !File.Exists(foodItemsPath))
         {
             Console.WriteLine("[ERROR] Missing required CSV files in Data-Files folder.");
@@ -127,6 +127,7 @@ public static class AydanFeatures
         Console.WriteLine();
     }
 
+
     // feature 6: process an order
     public static void Feature6_ProcessOrder(
         Dictionary<string, Restaurant> restaurantsById,
@@ -140,81 +141,97 @@ public static class AydanFeatures
 
         if (!restaurantsById.TryGetValue(rid, out Restaurant restaurant))
         {
-            Console.WriteLine("Restaurant not found.\n");
+            Console.WriteLine("Restaurant not found.");
+            Console.WriteLine();
             return;
         }
 
         if (restaurant.OrderQueue.Count == 0)
         {
-            Console.WriteLine("No orders in this restaurant queue.\n");
+            Console.WriteLine("No orders in this restaurant queue.");
+            Console.WriteLine();
             return;
         }
 
-        Order order = restaurant.OrderQueue.Dequeue();
+        // Loop through the queue ONCE (FIFO), so each current order is shown once.
+        int ordersToProcess = restaurant.OrderQueue.Count;
 
-        PrintOrderBlock(order, customersByEmail);
-
-        Console.Write("[C]onfirm / [R]eject / [S]kip / [D]eliver: ");
-        string action = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
-
-        if (action == "C")
+        for (int i = 0; i < ordersToProcess; i++)
         {
-            if (IsStatus(order, "Pending"))
+            Order order = restaurant.OrderQueue.Dequeue();
+
+            PrintOrderBlock(order, customersByEmail);
+
+            // Only these states are meant for processing in the writeup:
+            // Pending -> Confirm/Reject
+            // Cancelled -> Skip
+            // Preparing -> Deliver
+            bool isPending = IsStatus(order, "Pending");
+            bool isCancelled = IsStatus(order, "Cancelled");
+            bool isPreparing = IsStatus(order, "Preparing");
+
+            // If this order is already completed (e.g., Delivered / Rejected), just move on.
+            if (!isPending && !isCancelled && !isPreparing)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Order {order.OrderId} is already {order.OrderStatus}. Skipping.");
+                Console.WriteLine();
+                continue; // do not put completed orders back into the queue
+            }
+
+            string action;
+            while (true)
+            {
+                Console.Write("[C]onfirm / [R]eject / [S]kip / [D]eliver: ");
+                action = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+
+                bool ok =
+                    (isPending && (action == "C" || action == "R")) ||
+                    (isCancelled && action == "S") ||
+                    (isPreparing && action == "D");
+
+                if (ok) break;
+
+                Console.WriteLine("Invalid option for this order status. Try again.");
+                Console.WriteLine();
+            }
+
+            // Apply the action
+            if (action == "C") // Pending -> Preparing (stays in queue)
             {
                 order.OrderStatus = "Preparing";
-                Console.WriteLine($"\nOrder {order.OrderId} confirmed. Status: {order.OrderStatus}\n");
+                Console.WriteLine();
+                Console.WriteLine($"Order {order.OrderId} confirmed. Status: {order.OrderStatus}");
+                Console.WriteLine();
+
                 restaurant.OrderQueue.Enqueue(order);
             }
-            else
-            {
-                Console.WriteLine("\nAction not allowed for this order status.\n");
-                restaurant.OrderQueue.Enqueue(order);
-            }
-        }
-        else if (action == "R")
-        {
-            if (IsStatus(order, "Pending"))
+            else if (action == "R") // Pending -> Rejected (refund stack)
             {
                 order.OrderStatus = "Rejected";
                 PushRefundIfNotExists(refundStack, order);
-                Console.WriteLine($"\nOrder {order.OrderId} rejected. Refund of ${order.OrderTotal:0.00} processed.\n");
+
+                Console.WriteLine();
+                Console.WriteLine($"Order {order.OrderId} rejected. Refund of ${order.OrderTotal:0.00} processed.");
+                Console.WriteLine();
             }
-            else
+            else if (action == "S") // Cancelled -> skip (move on)
             {
-                Console.WriteLine("\nAction not allowed for this order status.\n");
-                restaurant.OrderQueue.Enqueue(order);
-            }
-        }
-        else if (action == "S")
-        {
-            if (IsStatus(order, "Cancelled"))
-            {
+                // (Cancelled orders should already be refunded when cancelled; stack is for record.)
                 PushRefundIfNotExists(refundStack, order);
-                Console.WriteLine($"\nOrder {order.OrderId} skipped.\n");
+
+                Console.WriteLine();
+                Console.WriteLine($"Order {order.OrderId} skipped.");
+                Console.WriteLine();
             }
-            else
-            {
-                Console.WriteLine("\nAction not allowed for this order status.\n");
-                restaurant.OrderQueue.Enqueue(order);
-            }
-        }
-        else if (action == "D")
-        {
-            if (IsStatus(order, "Preparing"))
+            else if (action == "D") // Preparing -> Delivered (done)
             {
                 order.OrderStatus = "Delivered";
-                Console.WriteLine($"\nOrder {order.OrderId} delivered. Status: {order.OrderStatus}\n");
+
+                Console.WriteLine();
+                Console.WriteLine($"Order {order.OrderId} delivered. Status: {order.OrderStatus}");
+                Console.WriteLine();
             }
-            else
-            {
-                Console.WriteLine("\nAction not allowed for this order status.\n");
-                restaurant.OrderQueue.Enqueue(order);
-            }
-        }
-        else
-        {
-            Console.WriteLine("\nInvalid option.\n");
-            restaurant.OrderQueue.Enqueue(order);
         }
     }
 
@@ -284,8 +301,6 @@ public static class AydanFeatures
         target.OrderStatus = "Cancelled";
         PushRefundIfNotExists(refundStack, target);
 
-        if (restaurantsById.TryGetValue(target.RestaurantId, out Restaurant r))
-            RemoveFromQueueByOrderId(r, target.OrderId);
 
         Console.WriteLine($"\nOrder {target.OrderId} cancelled. Refund of ${target.OrderTotal:0.00} processed.\n");
     }
@@ -299,7 +314,7 @@ public static class AydanFeatures
         Console.WriteLine("Display Total Order Amount");
         Console.WriteLine("==========================");
 
-        // collect unique orders (avoid double counting)
+        
         Dictionary<int, Order> uniqueOrders = new Dictionary<int, Order>();
         foreach (var c in customers)
         {
@@ -310,8 +325,8 @@ public static class AydanFeatures
             }
         }
 
-        double grandDeliveredNet = 0.0; // delivered totals excluding delivery fee per order
-        double grandRefunds = 0.0;      // refunded totals (full amount)
+        double grandDeliveredNet = 0.0; 
+        double grandRefunds = 0.0;      
 
         Console.WriteLine("Restaurant                         Delivered (excl. delivery)        Refunds");
         Console.WriteLine("--------------------------------  -------------------------------   ----------------");
@@ -361,8 +376,8 @@ public static class AydanFeatures
         Console.WriteLine($"Total order amount (Delivered, excl. delivery): ${grandDeliveredNet:0.00}");
         Console.WriteLine($"Total refunds (Rejected/Cancelled):            ${grandRefunds:0.00}");
 
-        // 30% of (delivered net - refunds)
-        double finalEarned = (grandDeliveredNet - grandRefunds) * GRUBEROO_FEE_RATE;
+
+        double finalEarned = grandDeliveredNet * GRUBEROO_FEE_RATE;
         Console.WriteLine($"Final amount Gruberoo earns:                   ${finalEarned:0.00}");
         Console.WriteLine();
     }
@@ -676,7 +691,7 @@ public static class AydanFeatures
         }
     }
 
-    // ---------- helpers (favourites) ----------
+    
     private class FavouriteRecord
     {
         public int FavouriteId;
@@ -935,7 +950,7 @@ public static class AydanFeatures
         }
     }
 
-    // ---------- existing helpers ----------
+    
     private static void PrintOrderBlock(Order o, Dictionary<string, Customer> customersByEmail)
     {
         string custName = o.CustomerEmail;

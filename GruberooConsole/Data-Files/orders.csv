@@ -35,3 +35,4 @@ OrderId,CustomerEmail,RestaurantId,DeliveryDate,DeliveryTime,DeliveryAddress,Cre
 1034,daniel.wong@email.com,R006,20/01/2026,11:45,753 Woodlands Dr 50 #04-15,18/01/2026 13:52,20,Confirmed,"Miso Soup, 2|Salmon Nigiri, 2"
 1035,jasmine.koh@email.com,R010,03/02/2026,11:30,753 Woodlands Dr 50 #04-15,02/02/2026 10:56,42.5,Cancelled,"Ribeye Steak, 1|Grilled Asparagus, 2"
 1036,alice.tan@email.com,R001,15/02/2026,12:30,123 Main Street,10/02/2026 16:07,31.6,Pending,"Beef Burger, 2|Caesar Salad, 1"
+1037,alice.tan@email.com,R001,15/02/2026,12:30,123 Main Street,11/02/2026 01:12,91.1,Pending,"Beef Burger, 2|Grilled Steak, 3|Chicken Rice, 2"
