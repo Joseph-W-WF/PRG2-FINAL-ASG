@@ -22,8 +22,7 @@ public static class JosephFeatures
         var customers = FileLoader.LoadCustomers(customersPath);
         OrderLoader.LoadOrders(ordersPath, customers, restaurants);
 
-        Console.WriteLine($"{customers.Count} customers loaded!");
-        Console.WriteLine("orders loaded into Customer Order List and Restaurant Order Queue.\n");
+       
 
         return customers;
     }
@@ -48,6 +47,7 @@ public static class JosephFeatures
                     Console.WriteLine($"- {f.ItemName}: {f.Description} - ${f.Price:0.00}");
                 }
             }
+            Console.WriteLine("");
         }
 
         Console.WriteLine();
@@ -61,7 +61,6 @@ public static class JosephFeatures
         List<Restaurant> restaurants,
         string ordersPath)
     {
-        Console.WriteLine();
         Console.WriteLine("Create New Order");
         Console.WriteLine("================");
 
@@ -81,7 +80,7 @@ public static class JosephFeatures
             Console.WriteLine("No food items available.\n");
             return;
         }
-
+        Console.WriteLine("");
         Console.WriteLine("Available Food Items:");
         for (int i = 0; i < available.Count; i++)
             Console.WriteLine($"{i + 1}. {available[i].ItemName} - ${available[i].Price:0.00}");
@@ -112,6 +111,7 @@ public static class JosephFeatures
         }
 
         Console.Write("Add special request? [Y/N]: ");
+        Console.WriteLine();
         string sr = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
         if (sr == "Y")
             order.SpecialRequest = ReadNonEmpty("Enter special request: ");

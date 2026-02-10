@@ -1,5 +1,5 @@
 //==========================================================
-// Student Number : S10273196
+// Student Number : S10273117G
 // Student Name : Aydan Yeo
 // Partner Name : Joseph Wong
 //==========================================================
@@ -11,7 +11,7 @@ using System.IO;
 
 public static class AydanFeatures
 {
-    // feature 1 (aydan): load restaurants + food items
+    // feature 1: load files (restaurants + food items)
     public static void Feature1_LoadRestaurantsAndFoodItems(
         string dataDir,
         Dictionary<string, Restaurant> restaurantsById,
@@ -21,24 +21,19 @@ public static class AydanFeatures
         restaurantsLoaded = 0;
         foodItemsLoaded = 0;
 
-        if (restaurantsById == null)
-            throw new ArgumentNullException(nameof(restaurantsById));
-
-        if (string.IsNullOrWhiteSpace(dataDir))
-            dataDir = ".";
+        restaurantsById.Clear();
 
         string restaurantsPath = Path.Combine(dataDir, "restaurants.csv");
         string foodItemsPath = FindFoodItemsFile(dataDir);
 
         if (!File.Exists(restaurantsPath))
-            throw new FileNotFoundException("cannot find restaurants.csv at: " + restaurantsPath);
+            throw new FileNotFoundException("Missing restaurants.csv at: " + restaurantsPath);
 
-        if (string.IsNullOrWhiteSpace(foodItemsPath) || !File.Exists(foodItemsPath))
-            throw new FileNotFoundException("cannot find fooditems.csv in folder: " + dataDir);
-
-        restaurantsById.Clear();
+        if (!File.Exists(foodItemsPath))
+            throw new FileNotFoundException("Missing fooditems.csv at: " + foodItemsPath);
 
         string[] restLines = File.ReadAllLines(restaurantsPath);
+
         for (int i = 1; i < restLines.Length; i++)
         {
             if (string.IsNullOrWhiteSpace(restLines[i])) continue;
@@ -60,6 +55,7 @@ public static class AydanFeatures
         }
 
         string[] foodLines = File.ReadAllLines(foodItemsPath);
+
         for (int i = 1; i < foodLines.Length; i++)
         {
             if (string.IsNullOrWhiteSpace(foodLines[i])) continue;
@@ -67,199 +63,179 @@ public static class AydanFeatures
             List<string> p = CsvUtils.SplitCsvLine(foodLines[i]);
             if (p.Count < 4) continue;
 
-            string restId = p[0].Trim();
+            string restaurantId = p[0].Trim();
             string itemName = p[1].Trim();
             string desc = p[2].Trim();
             string priceStr = p[3].Trim();
 
-            if (!restaurantsById.ContainsKey(restId)) continue;
+            if (!restaurantsById.TryGetValue(restaurantId, out Restaurant restaurant))
+                continue;
 
-            double price = 0;
-            double.TryParse(priceStr, NumberStyles.Any, CultureInfo.InvariantCulture, out price);
+            if (!double.TryParse(priceStr, NumberStyles.Any, CultureInfo.InvariantCulture, out double price))
+                price = 0;
 
             FoodItem fi = new FoodItem(itemName, desc, price);
-
-            Menu main = restaurantsById[restId].GetOrCreateMainMenu();
-            main.AddFoodItem(fi);
+            restaurant.GetOrCreateMainMenu().AddFoodItem(fi);
 
             foodItemsLoaded++;
         }
     }
 
-    // feature 4 (aydan): list all orders (basic info)
-    // note: your Program.cs currently passes only List<Order>, so we display email + restaurant id.
-    // assignment wants customer name + restaurant name (you can add an overload later). :contentReference[oaicite:2]{index=2}
-    public static void Feature4_ListAllOrders(List<Order> allOrders)
+    // feature 4: list all orders
+    public static void Feature4_ListAllOrders(
+        List<Order> allOrders,
+        Dictionary<string, Customer> customersByEmail,
+        Dictionary<string, Restaurant> restaurantsById)
     {
         Console.WriteLine("All Orders");
         Console.WriteLine("==========");
 
-        if (allOrders == null || allOrders.Count == 0)
-        {
-            Console.WriteLine("(no orders)\n");
-            return;
-        }
+        Console.WriteLine("Order ID   Customer      Restaurant       Delivery Date/Time   Amount    Status");
+        Console.WriteLine("--------   ----------    -------------    ------------------   ------    ---------");
 
-        Console.WriteLine("Order ID  Customer Email              Restaurant ID  Delivery Date/Time     Amount     Status");
-        Console.WriteLine("--------  --------------------------  -----------    ------------------     ------     ---------");
+        allOrders.Sort((a, b) => a.OrderId.CompareTo(b.OrderId));
 
         for (int i = 0; i < allOrders.Count; i++)
         {
             Order o = allOrders[i];
 
-            string email = o.CustomerEmail ?? "-";
-            string rid = o.RestaurantId ?? "-";
-            string status = o.OrderStatus ?? "-";
+            string customerName = o.CustomerEmail;
+            if (customersByEmail.TryGetValue(o.CustomerEmail, out Customer c))
+                customerName = c.CustomerName;
+
+            string restaurantName = o.RestaurantId;
+            if (restaurantsById.TryGetValue(o.RestaurantId, out Restaurant r))
+                restaurantName = r.Name;
+
+            string dt = o.DeliveryDateTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+            string amt = "$" + o.OrderTotal.ToString("0.00", CultureInfo.InvariantCulture);
 
             Console.WriteLine(
-                $"{o.OrderId,-8}  {TrimTo(email, 26),-26}  {rid,-11}  {o.DeliveryDateTime:dd/MM/yyyy HH:mm,-18}  ${o.OrderTotal,8:0.00}  {status}"
+                $"{o.OrderId,-8}   {Trunc(customerName, 10),-10}    {Trunc(restaurantName, 13),-13}    {dt,-18}   {amt,-7}   {o.OrderStatus}"
             );
         }
 
         Console.WriteLine();
     }
 
-    // feature 6 (aydan): process an order (restaurant queue)
-    // rules: confirm/reject only if Pending, skip only if Cancelled, deliver only if Preparing. :contentReference[oaicite:3]{index=3}
+    // feature 6: process an order
     public static void Feature6_ProcessOrder(
         Dictionary<string, Restaurant> restaurantsById,
+        Dictionary<string, Customer> customersByEmail,
         Stack<Order> refundStack)
     {
         Console.WriteLine("Process Order");
         Console.WriteLine("=============");
 
-        if (restaurantsById == null || refundStack == null)
-        {
-            Console.WriteLine("internal error.\n");
-            return;
-        }
-
         string rid = ReadNonEmpty("Enter Restaurant ID: ");
 
-        if (!restaurantsById.ContainsKey(rid))
+        if (!restaurantsById.TryGetValue(rid, out Restaurant restaurant))
         {
-            Console.WriteLine("invalid restaurant id.\n");
+            Console.WriteLine("Restaurant not found.\n");
             return;
         }
 
-        Restaurant r = restaurantsById[rid];
-        Queue<Order> q = r.OrderQueue;
-
-        if (q == null || q.Count == 0)
+        if (restaurant.OrderQueue.Count == 0)
         {
-            Console.WriteLine("no orders in this restaurant queue.\n");
+            Console.WriteLine("No orders in this restaurant queue.\n");
             return;
         }
 
-        int count = q.Count;
+        Order order = restaurant.OrderQueue.Dequeue();
 
-        for (int i = 0; i < count; i++)
+        PrintOrderBlock(order, customersByEmail);
+
+        Console.Write("[C]onfirm / [R]eject / [S]kip / [D]eliver: ");
+        string action = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+
+        if (action == "C")
         {
-            Order o = q.Dequeue();
-
-            PrintOrderForProcessing(o);
-
-            Console.Write("[C]onfirm / [R]eject / [S]kip / [D]eliver: ");
-            string action = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
-
-            string st = NormalizeStatus(o.OrderStatus);
-
-            if (action == "C")
+            if (IsStatus(order, "Pending"))
             {
-                if (st == "PENDING")
-                {
-                    o.OrderStatus = "Preparing";
-                    Console.WriteLine($"Order {o.OrderId} confirmed. Status: Preparing\n");
-                }
-                else
-                {
-                    Console.WriteLine("cannot confirm (order not pending).\n");
-                }
-                q.Enqueue(o);
-            }
-            else if (action == "R")
-            {
-                if (st == "PENDING")
-                {
-                    o.OrderStatus = "Rejected";
-                    refundStack.Push(o);
-                    Console.WriteLine($"Order {o.OrderId} rejected. Refund of ${o.OrderTotal:0.00} processed.\n");
-                }
-                else
-                {
-                    Console.WriteLine("cannot reject (order not pending).\n");
-                }
-                q.Enqueue(o);
-            }
-            else if (action == "S")
-            {
-                if (st == "CANCELLED")
-                {
-                    Console.WriteLine($"Order {o.OrderId} skipped (cancelled).\n");
-                }
-                else
-                {
-                    Console.WriteLine("cannot skip (only cancelled orders can be skipped).\n");
-                }
-                q.Enqueue(o);
-            }
-            else if (action == "D")
-            {
-                // your CSV contains "Confirmed" sometimes, treat it as preparing for delivery
-                if (st == "PREPARING" || st == "CONFIRMED")
-                {
-                    o.OrderStatus = "Delivered";
-                    Console.WriteLine($"Order {o.OrderId} delivered. Status: Delivered\n");
-                }
-                else
-                {
-                    Console.WriteLine("cannot deliver (order must be preparing).\n");
-                }
-                q.Enqueue(o);
+                order.OrderStatus = "Preparing";
+                Console.WriteLine($"\nOrder {order.OrderId} confirmed. Status: {order.OrderStatus}\n");
+                restaurant.OrderQueue.Enqueue(order);
             }
             else
             {
-                Console.WriteLine("invalid option.\n");
-                q.Enqueue(o);
+                Console.WriteLine("\nAction not allowed for this order status.\n");
+                restaurant.OrderQueue.Enqueue(order);
             }
+        }
+        else if (action == "R")
+        {
+            if (IsStatus(order, "Pending"))
+            {
+                order.OrderStatus = "Rejected";
+                PushRefundIfNotExists(refundStack, order);
+                Console.WriteLine($"\nOrder {order.OrderId} rejected. Refund of ${order.OrderTotal:0.00} processed.\n");
+            }
+            else
+            {
+                Console.WriteLine("\nAction not allowed for this order status.\n");
+                restaurant.OrderQueue.Enqueue(order);
+            }
+        }
+        else if (action == "S")
+        {
+            if (IsStatus(order, "Cancelled"))
+            {
+                PushRefundIfNotExists(refundStack, order);
+                Console.WriteLine($"\nOrder {order.OrderId} skipped.\n");
+            }
+            else
+            {
+                Console.WriteLine("\nAction not allowed for this order status.\n");
+                restaurant.OrderQueue.Enqueue(order);
+            }
+        }
+        else if (action == "D")
+        {
+            if (IsStatus(order, "Preparing"))
+            {
+                order.OrderStatus = "Delivered";
+                Console.WriteLine($"\nOrder {order.OrderId} delivered. Status: {order.OrderStatus}\n");
+            }
+            else
+            {
+                Console.WriteLine("\nAction not allowed for this order status.\n");
+                restaurant.OrderQueue.Enqueue(order);
+            }
+        }
+        else
+        {
+            Console.WriteLine("\nInvalid option.\n");
+            restaurant.OrderQueue.Enqueue(order);
         }
     }
 
-    // feature 8 (aydan): delete order (cancel + refund)
-    // only pending orders can be deleted. :contentReference[oaicite:4]{index=4}
+    // feature 8: delete an existing order
     public static void Feature8_DeleteOrder(
         Dictionary<string, Customer> customersByEmail,
+        Dictionary<string, Restaurant> restaurantsById,
         Stack<Order> refundStack)
     {
         Console.WriteLine("Delete Order");
-        Console.WriteLine("===========");
-
-        if (customersByEmail == null || refundStack == null)
-        {
-            Console.WriteLine("internal error.\n");
-            return;
-        }
+        Console.WriteLine("============");
 
         string email = ReadNonEmpty("Enter Customer Email: ");
 
-        if (!customersByEmail.ContainsKey(email))
+        if (!customersByEmail.TryGetValue(email, out Customer customer))
         {
-            Console.WriteLine("customer not found.\n");
+            Console.WriteLine("Customer not found.\n");
             return;
         }
 
-        Customer c = customersByEmail[email];
-
         List<Order> pending = new List<Order>();
-        for (int i = 0; i < c.Orders.Count; i++)
+        for (int i = 0; i < customer.Orders.Count; i++)
         {
-            if (NormalizeStatus(c.Orders[i].OrderStatus) == "PENDING")
-                pending.Add(c.Orders[i]);
+            if (IsStatus(customer.Orders[i], "Pending"))
+                pending.Add(customer.Orders[i]);
         }
 
         if (pending.Count == 0)
         {
-            Console.WriteLine("no pending orders.\n");
+            Console.WriteLine("No Pending orders.\n");
             return;
         }
 
@@ -281,74 +257,98 @@ public static class AydanFeatures
 
         if (target == null)
         {
-            Console.WriteLine("invalid order id.\n");
+            Console.WriteLine("Invalid Order ID.\n");
             return;
         }
 
-        Console.WriteLine($"Customer: {c.CustomerName}");
-        Console.WriteLine("Ordered Items:");
-        PrintOrderedItems(target);
+        PrintDeleteBlock(target, customer);
 
-        Console.WriteLine($"Delivery date/time: {target.DeliveryDateTime:dd/MM/yyyy HH:mm}");
-        Console.WriteLine($"Total Amount: ${target.OrderTotal:0.00}");
-        Console.WriteLine($"Order Status: {target.OrderStatus}");
+        Console.Write("Confirm deletion? [Y/N]: ");
+        string confirm = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
 
-        bool yes = ReadYesNo("Confirm deletion? [Y/N]: ");
-        if (!yes)
+        if (confirm != "Y")
         {
-            Console.WriteLine("deletion cancelled.\n");
+            Console.WriteLine("Deletion cancelled.\n");
             return;
         }
 
         target.OrderStatus = "Cancelled";
-        refundStack.Push(target);
+        PushRefundIfNotExists(refundStack, target);
 
-        Console.WriteLine($"Order {target.OrderId} cancelled. Refund of ${target.OrderTotal:0.00} processed.\n");
+        if (restaurantsById.TryGetValue(target.RestaurantId, out Restaurant r))
+            RemoveFromQueueByOrderId(r, target.OrderId);
+
+        Console.WriteLine($"\nOrder {target.OrderId} cancelled. Refund of ${target.OrderTotal:0.00} processed.\n");
     }
 
-    private static void PrintOrderForProcessing(Order o)
+    private static void PrintOrderBlock(Order o, Dictionary<string, Customer> customersByEmail)
     {
+        string custName = o.CustomerEmail;
+        if (customersByEmail.TryGetValue(o.CustomerEmail, out Customer c))
+            custName = c.CustomerName;
+
+        Console.WriteLine();
         Console.WriteLine($"Order {o.OrderId}:");
-        Console.WriteLine($"Customer Email: {o.CustomerEmail}");
+        Console.WriteLine($"Customer: {custName}");
         Console.WriteLine("Ordered Items:");
-        PrintOrderedItems(o);
+
+        for (int i = 0; i < o.OrderedFoodItems.Count; i++)
+            Console.WriteLine($"{i + 1}. {o.OrderedFoodItems[i].ItemName} - {o.OrderedFoodItems[i].QtyOrdered}");
+
         Console.WriteLine($"Delivery date/time: {o.DeliveryDateTime:dd/MM/yyyy HH:mm}");
         Console.WriteLine($"Total Amount: ${o.OrderTotal:0.00}");
         Console.WriteLine($"Order Status: {o.OrderStatus}");
     }
 
-    private static void PrintOrderedItems(Order o)
+    private static void PrintDeleteBlock(Order o, Customer customer)
     {
-        if (o.OrderedFoodItems == null || o.OrderedFoodItems.Count == 0)
-        {
-            Console.WriteLine("(no items)");
-            return;
-        }
+        Console.WriteLine();
+        Console.WriteLine($"Customer: {customer.CustomerName}");
+        Console.WriteLine("Ordered Items:");
 
         for (int i = 0; i < o.OrderedFoodItems.Count; i++)
-        {
-            OrderedFoodItem it = o.OrderedFoodItems[i];
-            Console.WriteLine($"{i + 1}. {it.ItemName} - {it.QtyOrdered}");
-        }
+            Console.WriteLine($"{i + 1}. {o.OrderedFoodItems[i].ItemName} - {o.OrderedFoodItems[i].QtyOrdered}");
+
+        Console.WriteLine($"Delivery date/time: {o.DeliveryDateTime:dd/MM/yyyy HH:mm}");
+        Console.WriteLine($"Total Amount: ${o.OrderTotal:0.00}");
+        Console.WriteLine($"Order Status: {o.OrderStatus}");
     }
 
     private static string FindFoodItemsFile(string dataDir)
     {
-        string exact = Path.Combine(dataDir, "fooditems.csv");
-        if (File.Exists(exact)) return exact;
+        string p1 = Path.Combine(dataDir, "fooditems.csv");
+        if (File.Exists(p1)) return p1;
 
-        string alt = Path.Combine(dataDir, "fooditems - Copy.csv");
-        if (File.Exists(alt)) return alt;
+        string p2 = Path.Combine(dataDir, "fooditems - Copy.csv");
+        if (File.Exists(p2)) return p2;
 
-        string[] matches = Directory.GetFiles(dataDir, "fooditems*.csv");
-        if (matches.Length > 0) return matches[0];
-
-        return "";
+        return p1;
     }
 
-    private static string NormalizeStatus(string status)
+    private static bool IsStatus(Order o, string expected)
     {
-        return (status ?? "").Trim().ToUpperInvariant();
+        return string.Equals(o.OrderStatus, expected, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RemoveFromQueueByOrderId(Restaurant r, int orderId)
+    {
+        int n = r.OrderQueue.Count;
+        for (int i = 0; i < n; i++)
+        {
+            Order o = r.OrderQueue.Dequeue();
+            if (o.OrderId != orderId)
+                r.OrderQueue.Enqueue(o);
+        }
+    }
+
+    private static void PushRefundIfNotExists(Stack<Order> stack, Order order)
+    {
+        foreach (var o in stack)
+        {
+            if (o.OrderId == order.OrderId)
+                return;
+        }
+        stack.Push(order);
     }
 
     private static string ReadNonEmpty(string prompt)
@@ -358,7 +358,7 @@ public static class AydanFeatures
             Console.Write(prompt);
             string s = (Console.ReadLine() ?? "").Trim();
             if (s.Length > 0) return s;
-            Console.WriteLine("cannot be empty.");
+            Console.WriteLine("Value cannot be empty.\n");
         }
     }
 
@@ -369,29 +369,18 @@ public static class AydanFeatures
             Console.Write(prompt);
             string s = (Console.ReadLine() ?? "").Trim();
 
-            int n;
-            if (int.TryParse(s, out n)) return n;
+            if (int.TryParse(s, out int v))
+                return v;
 
-            Console.WriteLine("please enter a valid number.");
+            Console.WriteLine("Invalid number. Try again.\n");
         }
     }
 
-    private static bool ReadYesNo(string prompt)
+    private static string Trunc(string s, int maxLen)
     {
-        while (true)
-        {
-            Console.Write(prompt);
-            string s = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
-            if (s == "Y") return true;
-            if (s == "N") return false;
-            Console.WriteLine("please enter Y or N.");
-        }
-    }
-
-    private static string TrimTo(string s, int maxLen)
-    {
-        if (s == null) s = "";
+        if (s == null) return "";
         if (s.Length <= maxLen) return s;
         return s.Substring(0, maxLen);
     }
 }
+
