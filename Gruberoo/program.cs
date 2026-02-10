@@ -28,6 +28,15 @@ public class Program
         RequireFile(restaurantsPath);
         RequireFile(foodItemsPath);
 
+        // stop early with a clear message (prevents a crash)
+        if (!File.Exists(customersPath) || !File.Exists(ordersPath) || !File.Exists(restaurantsPath) || !File.Exists(foodItemsPath))
+        {
+            Console.WriteLine();
+            Console.WriteLine("Fix: make sure you are running the GruberooConsole project AND the Data-Files folder is present.");
+            Console.WriteLine("If you're using Visual Studio: right-click GruberooConsole -> Set as Startup Project, then Run.");
+            return;
+        }
+
         var restaurantsById = new Dictionary<string, Restaurant>(StringComparer.OrdinalIgnoreCase);
         var refundStack = new Stack<Order>();
 
@@ -68,6 +77,7 @@ public class Program
             Console.WriteLine("6. Delete an existing order");
             Console.WriteLine("7. Bulk process pending orders (today)");
             Console.WriteLine("8. Display total order amount");
+            Console.WriteLine("9. Favourite orders (quick reorder)");
             Console.WriteLine("0. Exit");
             Console.Write("Enter your choice: ");
 
@@ -114,6 +124,10 @@ public class Program
                     AydanFeatures.AdvancedB_DisplayTotalOrderAmount(restaurants, customers);
                     break;
 
+                case "9":
+                    AydanFeatures.AdvancedC_FavouriteOrders(dataDir, customers, restaurants, ordersPath);
+                    break;
+
                 default:
                     Console.WriteLine("Invalid option.\n");
                     break;
@@ -125,20 +139,35 @@ public class Program
 
     private static string ResolveDataDir()
     {
-        string dir = Directory.GetCurrentDirectory();
+        // Try from exe folder first (works when running from bin/Debug/net8.0)
+        string[] bases = new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() };
 
-        for (int i = 0; i < 8; i++)
+        foreach (var b in bases)
+        {
+            string found = WalkUpForDataFiles(b);
+            if (found.Length > 0) return found;
+        }
+
+        // Fallback: current directory (may still work if Data-Files is beside it)
+        return Directory.GetCurrentDirectory();
+    }
+
+    private static string WalkUpForDataFiles(string startDir)
+    {
+        string dir = startDir;
+
+        for (int i = 0; i < 12; i++)
         {
             string candidate = Path.Combine(dir, "Data-Files");
             if (Directory.Exists(candidate))
                 return candidate;
 
-            DirectoryInfo? parent = Directory.GetParent(dir);
+            DirectoryInfo parent = Directory.GetParent(dir);
             if (parent == null) break;
             dir = parent.FullName;
         }
 
-        return Directory.GetCurrentDirectory();
+        return "";
     }
 
     private static void RequireFile(string filePath)
