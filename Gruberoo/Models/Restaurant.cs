@@ -10,7 +10,9 @@ public class Restaurant
 	public List<Menu> Menus { get; }
 	public List<SpecialOffer> SpecialOffers { get; }
 
-	public Restaurant(string restaurantId, string name, string email)
+    public Queue<Order> OrderQueue { get; } = new Queue<Order>();
+
+    public Restaurant(string restaurantId, string name, string email)
 	{
 		RestaurantId = restaurantId ?? "";
 		Name = name ?? "";
