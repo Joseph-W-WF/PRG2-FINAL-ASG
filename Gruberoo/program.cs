@@ -66,6 +66,7 @@ public class Program
             Console.WriteLine("4. Process an order");
             Console.WriteLine("5. Modify an existing order");
             Console.WriteLine("6. Delete an existing order");
+            Console.WriteLine("7. Bulk process pending orders (today)");
             Console.WriteLine("0. Exit");
             Console.Write("Enter your choice: ");
 
@@ -102,6 +103,10 @@ public class Program
 
                 case "6":
                     AydanFeatures.Feature8_DeleteOrder(customersByEmail, restaurantsById, refundStack);
+                    break;
+
+                case "7":
+                    JosephFeatures.AdvancedA_BulkProcessPendingOrdersForToday(restaurants, ordersPath, customers);
                     break;
 
                 default:

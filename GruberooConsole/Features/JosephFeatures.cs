@@ -1,4 +1,4 @@
-//==========================================================
+﻿//==========================================================
 // Student Number : S10272886
 // Student Name : Joseph Wong
 // Partner Name : Aydan Yeo
@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 public static class JosephFeatures
 {
@@ -21,9 +22,6 @@ public static class JosephFeatures
     {
         var customers = FileLoader.LoadCustomers(customersPath);
         OrderLoader.LoadOrders(ordersPath, customers, restaurants);
-
-       
-
         return customers;
     }
 
@@ -40,13 +38,9 @@ public static class JosephFeatures
         {
             Console.WriteLine($"Restaurant: {r.Name} ({r.RestaurantId})");
 
-            foreach (var menu in r.Menus)
-            {
-                foreach (var f in menu.FoodItems)
-                {
-                    Console.WriteLine($"- {f.ItemName}: {f.Description} - ${f.Price:0.00}");
-                }
-            }
+            foreach (var f in GetAllFoodItems(r))
+                Console.WriteLine($"- {f.ItemName}: {f.Description} - ${f.Price:0.00}");
+
             Console.WriteLine("");
         }
 
@@ -64,22 +58,22 @@ public static class JosephFeatures
         Console.WriteLine("Create New Order");
         Console.WriteLine("================");
 
-        Customer customer = PromptCustomer(customers);
+        var customer = PromptCustomer(customers);
         if (customer == null) return;
 
-        Restaurant restaurant = PromptRestaurant(restaurants);
+        var restaurant = PromptRestaurant(restaurants);
         if (restaurant == null) return;
 
         DateTime deliveryDT = PromptDeliveryDateTime();
         string address = ReadNonEmpty("Enter Delivery Address: ");
 
-        // collect menu items
         var available = GetAllFoodItems(restaurant);
         if (available.Count == 0)
         {
             Console.WriteLine("No food items available.\n");
             return;
         }
+
         Console.WriteLine("");
         Console.WriteLine("Available Food Items:");
         for (int i = 0; i < available.Count; i++)
@@ -87,11 +81,13 @@ public static class JosephFeatures
 
         int newOrderId = GetNextOrderId(customers);
 
-        var order = new Order(newOrderId, "Draft", address, "");
-        order.CustomerEmail = customer.EmailAddress;
-        order.RestaurantId = restaurant.RestaurantId;
-        order.OrderDateTime = DateTime.Now;
-        order.DeliveryDateTime = deliveryDT;
+        var order = new Order(newOrderId, "Draft", address, "")
+        {
+            CustomerEmail = customer.EmailAddress,
+            RestaurantId = restaurant.RestaurantId,
+            OrderDateTime = DateTime.Now,
+            DeliveryDateTime = deliveryDT
+        };
 
         while (true)
         {
@@ -130,8 +126,8 @@ public static class JosephFeatures
             return;
         }
 
-        Console.WriteLine("Payment method:");
-        Console.WriteLine("[CC] Credit Card / [PP] PayPal / [CD] Cash on Delivery:");
+        Console.Write("Payment method:");
+        Console.Write("[CC] Credit Card / [PP] PayPal / [CD] Cash on Delivery:");
         string method = ReadPaymentMethod();
 
         order.OrderPaymentMethod = method;
@@ -151,21 +147,20 @@ public static class JosephFeatures
     // FEATURE 7: Modify an existing order (Pending only)
     // ---------------------------
     public static void Feature7_ModifyExistingOrder(
-        List<Customer> customers,
-        List<Restaurant> restaurants,
-        string ordersPath)
+    List<Customer> customers,
+    List<Restaurant> restaurants,
+    string ordersPath)
     {
         Console.WriteLine();
         Console.WriteLine("Modify Order");
         Console.WriteLine("============");
 
-        Customer customer = PromptCustomer(customers);
+        var customer = PromptCustomer(customers);
         if (customer == null) return;
 
-        var pending = new List<Order>();
-        foreach (var o in customer.Orders)
-            if (string.Equals(o.OrderStatus, "Pending", StringComparison.OrdinalIgnoreCase))
-                pending.Add(o);
+        var pending = customer.Orders
+            .Where(o => string.Equals(o.OrderStatus, "Pending", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         if (pending.Count == 0)
         {
@@ -178,20 +173,15 @@ public static class JosephFeatures
 
         int orderId = ReadInt("Enter Order ID: ", 1, int.MaxValue);
 
-        Order order = null;
-        foreach (var o in pending)
-            if (o.OrderId == orderId) { order = o; break; }
-
+        var order = pending.FirstOrDefault(o => o.OrderId == orderId);
         if (order == null)
         {
             Console.WriteLine("Invalid Order ID.\n");
             return;
         }
 
-        Restaurant restaurant = null;
-        foreach (var r in restaurants)
-            if (string.Equals(r.RestaurantId, order.RestaurantId, StringComparison.OrdinalIgnoreCase))
-            { restaurant = r; break; }
+        var restaurant = restaurants.FirstOrDefault(r =>
+            string.Equals(r.RestaurantId, order.RestaurantId, StringComparison.OrdinalIgnoreCase));
 
         if (restaurant == null)
         {
@@ -199,27 +189,37 @@ public static class JosephFeatures
             return;
         }
 
+        // show current details (same as sample flow)
         PrintOrderDetails(order);
 
         Console.Write("Modify: [1] Items [2] Address [3] Delivery Time: ");
         string choice = (Console.ReadLine() ?? "").Trim();
 
+        // snapshot for rollback + for “what changed” messages
         double oldTotal = order.OrderTotal;
         string oldAddr = order.DeliveryAddress;
         DateTime oldDelivery = order.DeliveryDateTime;
         var oldItems = CloneItems(order.OrderedFoodItems);
 
+        // we’ll build the exact “updated…” message based on the choice
+        string updatedMessage;
+
         if (choice == "1")
         {
             ModifyItems(order, restaurant);
+            updatedMessage = $"Order {order.OrderId} updated. Items updated.";
         }
         else if (choice == "2")
         {
             order.DeliveryAddress = ReadNonEmpty("Enter new Address: ");
+            updatedMessage = $"Order {order.OrderId} updated. New Address: {order.DeliveryAddress}";
         }
         else if (choice == "3")
         {
             order.DeliveryDateTime = PromptNewTimeSameDate(order.DeliveryDateTime);
+            string newTime = order.DeliveryDateTime.ToString("HH:mm", CultureInfo.InvariantCulture);
+            // matches the sample style: “New Delivery Time: 14:00”
+            updatedMessage = $"Order {order.OrderId} updated. New Delivery Time: {newTime}";
         }
         else
         {
@@ -227,8 +227,10 @@ public static class JosephFeatures
             return;
         }
 
+        // recalc after changes
         order.RecalculateTotalWithDelivery(DELIVERY_FEE);
 
+        // if total increased, prompt to pay (keep your existing behaviour)
         if (order.OrderTotal > oldTotal + 0.0001)
         {
             Console.WriteLine($"Order total increased: ${oldTotal:0.00} -> ${order.OrderTotal:0.00}");
@@ -253,12 +255,104 @@ public static class JosephFeatures
             order.OrderPaid = true;
         }
 
-        // optional but useful: persist modifications back to orders.csv
+        // persist
         OrderCsvStore.RewriteAllOrders(ordersPath, customers);
 
-        Console.WriteLine("Order updated.\n");
+        // ✅ now prints “updated” + what exactly was updated (like the sample wants)
+        Console.WriteLine(updatedMessage);
+
+        // optional but matches the spec line “display updated order details”
         PrintOrderDetails(order);
     }
+
+
+    // ---------------------------
+    // ADVANCED FEATURE (a): Bulk processing of unprocessed orders for current day
+    // ---------------------------
+    public static void AdvancedA_BulkProcessPendingOrdersForToday(
+        List<Restaurant> restaurants,
+        string ordersPath,
+        List<Customer> customers)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Bulk Process Pending Orders (Today)");
+        Console.WriteLine("===================================");
+
+        DateTime now = DateTime.Now;
+        DateTime today = now.Date;
+
+        // 1) identify all orders with status "Pending" (in order queues)
+        int totalPendingInQueues = 0;
+        int processed = 0;
+        int preparing = 0;
+        int rejected = 0;
+
+        // Only process "current day" pending orders (delivery date = today)
+        var toProcess = new List<Order>();
+
+        foreach (var r in restaurants)
+        {
+            foreach (var o in r.OrderQueue) // Queue<T> can be enumerated
+            {
+                if (string.Equals(o.OrderStatus, "Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    totalPendingInQueues++;
+
+                    if (o.DeliveryDateTime.Date == today)
+                        toProcess.Add(o);
+                }
+            }
+        }
+
+        // 2) display total number in the Order Queues with this status
+        Console.WriteLine($"Total Pending orders in all restaurant queues: {totalPendingInQueues}");
+
+        if (toProcess.Count == 0)
+        {
+            Console.WriteLine("No Pending orders to bulk process for today.\n");
+            return;
+        }
+
+        // 3) for each order: attempt to process it
+        // - Rejected if delivery time is less than 1 hour
+        // - else Preparing
+        foreach (var o in toProcess)
+        {
+            bool lessThanOneHour = (o.DeliveryDateTime - now) < TimeSpan.FromHours(1);
+
+            if (lessThanOneHour)
+            {
+                o.OrderStatus = "Rejected";
+                rejected++;
+            }
+            else
+            {
+                o.OrderStatus = "Preparing";
+                preparing++;
+            }
+
+            processed++;
+        }
+
+        // Optional but useful: persist statuses back into orders.csv
+        // (so restart of program keeps the updated statuses)
+        OrderCsvStore.RewriteAllOrders(ordersPath, customers);
+
+        // 4) display summary statistics
+        double percent = (totalPendingInQueues == 0)
+            ? 0.0
+            : (processed * 100.0 / totalPendingInQueues);
+
+        Console.WriteLine();
+        Console.WriteLine("Summary");
+        Console.WriteLine("-------");
+        Console.WriteLine($"Orders processed: {processed}");
+        Console.WriteLine($"Preparing: {preparing}");
+        Console.WriteLine($"Rejected: {rejected}");
+        Console.WriteLine($"% processed against all Pending orders: {percent:0.00}%");
+        Console.WriteLine();
+    }
+
 
     // =========================
     // Helpers
@@ -267,11 +361,10 @@ public static class JosephFeatures
     {
         string email = ReadNonEmpty("Enter Customer Email: ");
 
-        foreach (var c in customers)
-        {
-            if (string.Equals(c.EmailAddress, email, StringComparison.OrdinalIgnoreCase))
-                return c;
-        }
+        var customer = customers.FirstOrDefault(c =>
+            string.Equals(c.EmailAddress, email, StringComparison.OrdinalIgnoreCase));
+
+        if (customer != null) return customer;
 
         Console.WriteLine("Customer not found.\n");
         return null;
@@ -281,23 +374,17 @@ public static class JosephFeatures
     {
         string rid = ReadNonEmpty("Enter Restaurant ID: ");
 
-        foreach (var r in restaurants)
-        {
-            if (string.Equals(r.RestaurantId, rid, StringComparison.OrdinalIgnoreCase))
-                return r;
-        }
+        var restaurant = restaurants.FirstOrDefault(r =>
+            string.Equals(r.RestaurantId, rid, StringComparison.OrdinalIgnoreCase));
+
+        if (restaurant != null) return restaurant;
 
         Console.WriteLine("Restaurant not found.\n");
         return null;
     }
 
-    private static List<FoodItem> GetAllFoodItems(Restaurant restaurant)
-    {
-        var list = new List<FoodItem>();
-        foreach (var m in restaurant.Menus)
-            list.AddRange(m.FoodItems);
-        return list;
-    }
+    private static List<FoodItem> GetAllFoodItems(Restaurant restaurant) =>
+        restaurant.Menus.SelectMany(m => m.FoodItems).ToList();
 
     private static void ModifyItems(Order order, Restaurant restaurant)
     {
@@ -317,15 +404,8 @@ public static class JosephFeatures
 
             var fi = available[itemNo - 1];
 
-            int idx = -1;
-            for (int i = 0; i < order.OrderedFoodItems.Count; i++)
-            {
-                if (string.Equals(order.OrderedFoodItems[i].ItemName, fi.ItemName, StringComparison.OrdinalIgnoreCase))
-                {
-                    idx = i;
-                    break;
-                }
-            }
+            int idx = order.OrderedFoodItems.FindIndex(ofi =>
+                string.Equals(ofi.ItemName, fi.ItemName, StringComparison.OrdinalIgnoreCase));
 
             if (qty == 0)
             {
@@ -434,11 +514,6 @@ public static class JosephFeatures
         return max + 1;
     }
 
-    private static List<OrderedFoodItem> CloneItems(List<OrderedFoodItem> items)
-    {
-        var copy = new List<OrderedFoodItem>();
-        foreach (var it in items)
-            copy.Add(new OrderedFoodItem(it.ItemName, it.Description, it.Price, it.QtyOrdered));
-        return copy;
-    }
+    private static List<OrderedFoodItem> CloneItems(List<OrderedFoodItem> items) =>
+        items.Select(it => new OrderedFoodItem(it.ItemName, it.Description, it.Price, it.QtyOrdered)).ToList();
 }
